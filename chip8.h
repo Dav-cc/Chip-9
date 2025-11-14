@@ -2,223 +2,129 @@
 #define __CHIP__
 
 
-
 #include <cstdint>
+#include <vector>
+#include <array>
 #include <random>
 #include <chrono>
-#include <array>
 #include <iterator>
 
-const unsigned int START_ADDRESS                  = 0x200;
-const unsigned int FONTSET_SIZE                   = 80;
-const unsigned int FONTSET_START_ADDRESS          = 0x50;
-const unsigned int VIDEO_WIDTH                    = 64;
-const unsigned int VIDEO_HEIGHT                   = 32;
 
+using namespace std;
 
 class Chip8{
- public:
+public:
+    uint16_t opcode;
+
+    /*
+     * chip8 use 4Kb memory frome address 0x000 to 0xFFF 
+     * this address segmented into 3 parts
+     *  {
+     *      0x000 - 0x1FF : this part is reserved for chip8 interpreter but in ours we dont read or write frome this segmanet
+     *      0x050 - 0x0A0 : this is for 16 built in characters (0-F)
+     *      0x200 - 0xFFF : instructions from rom will be stored in the address 0x200 and anything left after the rom is free to use
+     *  }
+     */
+    array<uint8_t, 4096> memory{};
+
+    /*
+     * registers is a dedicated locations for cpu to use for storage and cpu uses this special places for calculations 
+     * in our simulator we have 16 8bit registers (from V0 to VF) each register can hold a value from 0x00 to 0xFF
+     */
+    array<uint8_t, 16> registers{};
+
+    /*
+     * this register have to hold memory address for next instruction this is why it should be 16 bit cause last 
+     * memory addres stores in 0xFFF and memory address is 16bit 
+     */ 
+    uint16_t VI;
+ 
+    /*
+     * pc or programm counter stores the next instruction cpu need to handle and its 16 bit 
+     */
+    uint16_t PC;
+
+    /*
+     * when programm CALL's it should remmeber "wher i came from" cause when it finished should come back to place where
+     * we jumped out chip8 only can remembe 16 calls 
+     */
+    array<uint16_t, 16> stack{};
+
+
+    /*
+     * sp always points to wher we are in the stack and holds its addres this register is stack pointer
+     */
+    uint8_t SP;
+
+    /*
+     * The CHIP-8 has an additional memory buffer used for storing the
+     * graphics to display. It is 64 pixels wide and 32 pixels high. Each pixel
+     * is either on or off, so only two colors can be represented.
+     *
+     * Understanding and then emulating its operation is probably the most
+     * challenging part of the entire project (but still very easy compared to
+     * the NES).
+     *
+     * I’ll cover the exact implementation of the draw instruction down
+     * below, but first let’s cover how the drawing works. As mentioned, a pixel
+     * can be either on or off. In our case, we’ll use a uint32 for each pixel
+     * to make it easy to use with SDL (discussed later), so on is 0xFFFFFFFF
+     * and off is 0x00000000.
+     *
+     * The draw instruction iterates over each pixel in a sprite and XORs
+     * the sprite pixel with the display pixel.
+     *
+     *        Sprite Pixel Off XOR Display Pixel Off = Display Pixel Off
+     *        Sprite Pixel Off XOR Display Pixel On = Display Pixel On
+     *        Sprite Pixel On XOR Display Pixel Off = Display Pixel On
+     *        Sprite Pixel On XOR Display Pixel On = Display Pixel Off
+     *
+     * In other words, a display pixel can be set or unset with a sprite. This
+     * is often done to only update a specific part of the screen. If you knew
+     * you had drawn a sprite at (X,Y) and you now want to draw it at (X+1,Y+1),
+     * you could first issue a draw command again at (X,Y) which would erase the
+     * sprite, and then you could issue another draw command at (X+1,Y+1) to
+     * draw it in the new location. This is why moving objects in CHIP-8 games
+     * flicker.
+     */
+    array<uint32_t, 64*32> display{};
+
+    /*
+     * chip8 uses 8 bit delay timer if it's 0 it stays zero but if it's loaded with value it count it down with rate of 60Hz
+     */
+    uint8_t delaytimer; 
+
+    /*
+     * its another timer in chip8 produce sound (with 60Hz rate) but its single ton buzz 
+     */
+    uint8_t soundtimer;
+
+    /*
+     * Chip-8 has 16 input keys that match the first 16 hex values. 0 to F
+     * each key can be pressed or not pressed.
+     * Keypad       Keyboard
+     * +-+-+-+-+    +-+-+-+-+
+     * |1|2|3|C|    |1|2|3|4|
+     * +-+-+-+-+    +-+-+-+-+
+     * |4|5|6|D|    |Q|W|E|R|
+     * +-+-+-+-+ => +-+-+-+-+
+     * |7|8|9|E|    |A|S|D|F|
+     * +-+-+-+-+    +-+-+-+-+
+     * |A|0|B|F|    |Z|X|C|V|
+     * +-+-+-+-+    +-+-+-+-+
+     */
+    array<uint8_t, 16> keypad{};
+
+
+
+
+    void LoadRom(char const* filename);
+    Chip8();
     std::default_random_engine randGen;
     std::uniform_int_distribution<uint8_t> randByte;
-    /*
-     *  this are general perpose registers use for calculaton
-     *  16 gpr regiseters that every one has 8bit (2bytes)
-     */
-    std::array<uint8_t, 16> registers{}; 
-
-
-    /**
-     * 
-     *   chip 8 has a 4KB memory and it means 4096 byts from 0x000 to oxFFF
-     *   this space devited into three segments :
-     *   1. 0x000 to 0x1FF : reserved for chip 8 intrpreter
-     *   2. 0x050 to 0x0A0 : store 16 built in characters (some roms expecte to we have this segment)
-     *   3. 0x200 to 0xFFF : Instructions from the ROM will be stored starting at 0x200, and anything left after the ROM’s space is free to use.
-     */
-    std::array<uint8_t, 4096> memory{};
-
-
-    /**
-     *  is a register that stores memory addresses and caus last memory address is oxFFF 8bit register is so little we make it 16 bit.
-     */
-    uint16_t index{};
-
-
-    /**
-     * the actual program instructions are stored in memory starting at address 0x200.
-     * The CPU needs a way of keeping track of which instruction to execute next.
-     * The Program Counter (PC) is a special register that holds the address of the next instruction to execute.
-     * Again, it’s 16 bits because it has to be able to hold the maximum memory address (0xFFF).
-     */
-    uint16_t pc{};
-
-
-    std::array<uint16_t,16>stack{};
-
-
-
-    uint8_t sp{};
-
-
-    uint8_t delayTimer{};
-
-
-
-    uint8_t soundTimer{};
-    
-
-    std::array<uint8_t, 16> keypad{};
-
-
-    std::array<uint32_t, VIDEO_WIDTH * VIDEO_HEIGHT> video;
-
-
-    uint16_t opcode{};
-
-
-    void LoadRom(const char* filename);
-
-    Chip8() ;
-
-
-    // CLS
-    // clear the display
-    void OP_00E0();
-
-    // Ret
-    // return from a subroutine
-    void OP_00EE();
-
-    // Jump to location nnn
-    // the interpreter sets the pc to nnn
-    void OP_1nnn();
-
-
-    // CALL addr
-    // call subroutine at nnn
-    void OP_2nnn();
-
-    // SE Vx, byte
-    // skip next instruction if Vx = kk
-    void OP_3xkk();
-
-    // SNE Vx, byte
-    // skip next instruction if Vx != kk
-    void OP_4xkk();
-
-    // SE Vx, Vy
-    // skip next instruction if Vx = Vy
-    void OP_5xy0();
-
-    // LD Vx, byte
-    // set Vx = kk
-    void OP_6xkk();
-
-    // ADD Vx, byte
-    // set Vx = Vx+kk
-    void OP_7xkk();
-
-    // LD Vx, Vy
-    // set Vx = Vy
-    void OP_8xy0();
-
-    // OR Vx, Vy
-    // set Vx = Vx OR Vy
-    void OP_8xy1();
-
-    // AND Vx, Vy
-    // set Vx = Vx AND Vy
-    void OP_8xy2();
-
-    // XOR Vx, Vy
-    // set Vx = Vx XOR Vy
-    void OP_8xy3();
-
-    // ADD Vx, Vy
-    // set Vx = Vx + Vy, set Vf = carry
-    void OP_8xy4();
-
-    // SUB Vx, Vy
-    // set Vx = Vx - Vy, set Vf = not borrow
-    void OP_8xy5();
-
-    // SHR Vx
-    // set Vx = Vx SHR 1
-    void OP_8xy6();
-
-    // SUBN Vx, Vy
-    // set Vx = Vy - Vx, set Vf = Not borrow
-    void OP_8xy7();
-
-    // SHL Vx {,Vy}
-    // Set Vx = Vx SHL 1
-    void OP_8xyE();
-
-    // SNE Vx, Vy
-    // skip next instruction if Vx != Vy
-    void OP_9xy0();
-
-    // LD I, Addr
-    // set I = nnn
-    void OP_Annn();
-
-    // JP V0, addr
-    // jump to location nnn+V0
-    void OP_Bnnn();
-
-    // RND Vx, byte
-    // set Vx = random byte AND kk
-    void OP_Cxkk();
-
-    // DRW Vx, Vy, nibble
-    // display n byte sprite starting at memory location I at (Vx,Vy), set Vf =
-    // collison
-    void OP_Dxyn();
-
-    // SKP Vx
-    // skip next instruction if key with the value of Vx is pressed
-    void OP_Ex9E();
-
-    // SKNP Vx
-    // Skip next instruction if key with the value of Vx is not pressed
-    void OP_ExA1();
-
-    // LD Vx, DT
-    // set Vx = delay timer value
-    void OP_Fx07();
-
-    // LD Vx, K
-    // wait for a key press, store the value of key in Vx
-    void OP_Fx0A();
-
-    // LD DT,Vx
-    // set delay timer = Vx
-    void OP_Fx15();
-
-    // LD ST, Vx
-    // set sounde timer to Vx
-    void OP_Fx18();
-
-    // Add I, Vx
-    // set I = I + Vx
-    void OP_Fx1E();
-
-    // LD F, Vx
-    // set I = location of sprite for digit Vx
-    void OP_Fx29();
-
-    // LD B, Vx
-    // store BCD representation of Vx in memory locations I, I+1, and I+2
-    void OP_Fx33();
-
-    // LD [I], Vx
-    // store registers V0 through Vx in memory starting at location I
-    void OP_Fx55();
-
-    // LD Vx, [I]
-    // read registers V0 through Vx from memory starting at location I
-    void OP_Fx65();
 };
+
+
 
 
 
