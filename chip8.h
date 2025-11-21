@@ -116,10 +116,66 @@ public:
     array<uint8_t, 16> keypad{};
 
 
+    // instructions
+    
+    /*
+     * clears display [put zeros on video buffer]
+     */
+    void OP_00E0();
+
+    /*
+     * return frome a subtoutin
+     */
+    void OP_00EE();
+
+    /*
+     * jump to location nnn
+     */
+    void OP_1nnn();
+
+    /*
+     * when we call a subroutin we put the current pc on top of stack 
+     */
+    void OP_2nnn();
+
+    /*
+     * skipp next instruction if Vx = kk
+     */
+    void OP_3xkk();
+
+    /*
+     * skipp next instruction if Vx != kk
+     */
+    void OP_4xkk();
+
+    /*
+     * skipp next instriction if Vx=Vy
+     */
+    void OP_5xy0();
+
+    /*
+     * set Vx = kk
+     */
+    void OP_6xkk();
+
+    /*
+     * set Vx = Vx +kk
+     */
+    void OP_7xkk();
+
+    /*
+     * set Vx = Vy
+     */
+    void OP_8xy0();
 
 
+    // reading rom and load instructios in memory to execcute
     void LoadRom(char const* filename);
+
+    // class constructor and initialize someting in creating object of chip8
     Chip8();
+
+    // random generating utils
     std::default_random_engine randGen;
     std::uniform_int_distribution<uint8_t> randByte;
 };
