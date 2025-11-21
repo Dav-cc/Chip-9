@@ -5,9 +5,14 @@
 #include <random>
 #include <chrono>
 
+
+
 const unsigned int START_ADDRESS                     = 0x200; 
 const unsigned int FONT_STARTING_ADDRESS             = 0x050; 
 const unsigned int FONTSET_SIZE                      = 80;
+
+
+
 
 // reading file and fill the memory
 void Chip8::LoadRom(char const* filename){
@@ -62,18 +67,15 @@ void Chip8::OP_00E0(){
     display.fill(0);
 }
 
-
 void Chip8::OP_00EE(){
     --SP;
     PC = stack[SP];
 }
 
-
 void Chip8::OP_1nnn(){
     uint16_t address = opcode & 0x0FFFu;
     PC = address;
 }
-
 
 void Chip8::OP_2nnn() {
     uint16_t address = opcode & 0x0FFFu;
@@ -132,3 +134,119 @@ void Chip8::OP_8xy0(){
 
     registers[Vx] = registers[Vy];
 }
+
+void Chip8::OP_8xy1(){
+    uint8_t Vx = (opcode & 0x0F00) >> 8u;
+    uint8_t Vy = (opcode & 0x00F0) >> 4u;
+
+    // registers[Vx] = registers[Vx] | registers[Vy];
+    registers[Vx] |= registers[Vy];
+}
+
+void Chip8::OP_8xy2(){
+    uint8_t Vx = (opcode & 0x0F00) >> 8u;
+    uint8_t Vy = (opcode & 0x00F0) >> 4u;
+
+    registers[Vx] &= registers[Vy];
+}
+
+void Chip8::OP_8xy3(){
+    uint8_t Vx = (opcode & 0x0F00) >> 8u;
+    uint8_t Vy = (opcode & 0x00F0) >> 4u;
+
+    registers[Vx] ^= registers[Vy];
+}
+
+void Chip8::OP_8xy4(){
+    uint8_t Vx = (opcode & 0x0F00) >> 8u;
+    uint8_t Vy = (opcode & 0x00F0) >> 4u;
+
+    uint16_t sum = registers[Vx] + registers[Vy];
+
+    (sum > 255u) ? (registers[Vy] = 1) : (registers[Vy] = 0);
+    registers[Vx] = sum & 0xFFu;
+}
+
+void Chip8::OP_8xy5(){
+    uint8_t Vx = (opcode & 0x0F00) >> 8u;
+    uint8_t Vy = (opcode & 0x00F0) >> 4u;
+
+    (registers[Vx] > registers[Vy]) ? (registers[Vy] = 1) : (registers[Vy] = 0);
+
+    registers[Vx] -= registers[Vy];
+}
+
+void Chip8::OP_8xy6(){
+    uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+    registers[0xF] = (registers[Vx] & 0x1);
+    registers[Vx] >>= 1;
+}
+
+void Chip8::OP_8xy7(){
+    uint8_t Vx = (opcode & 0x0F00) >> 8u;
+    uint8_t Vy = (opcode & 0x00F0) >> 4u;
+
+    (registers[Vx] > registers[Vy]) ? (registers[0xF] = 1) : (registers[0xF] = 0);
+
+    registers[Vx] -= registers[Vy];
+
+}
+
+void Chip8::OP_8xyE(){
+    uint8_t Vx = (opcode & 0x0F00u) >> 8u; // 1010 1000
+    registers[0xF] = (registers[Vx] & 0x80) >> 7u;
+    registers[Vx] <<= 1;
+}
+
+void Chip8::OP_9xy0(){
+    uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+    uint8_t Vy = (opcode & 0x00F0u) >> 4u;
+
+    if(registers[Vx] != registers[Vy]){
+        PC += 2;
+    }
+}
+
+void Chip8::OP_Annn(){
+    uint16_t addr = (opcode & 0x0FFFu);
+    I = addr; 
+}
+
+void Chip8::OP_Bnnn(){
+    uint16_t addr = (opcode & 0x0FFF);
+    PC = addr + registers[0];
+}
+
+void Chip8::OP_Cxkk(){
+    uint8_t byte = (opcode & 0x00FFu);
+    uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+    registers[Vx] += randByte(randGen) & byte;
+}
+
+void Chip8::OP_Dxyn(){
+    
+}
+
+void Chip8::OP_Ex9E(){
+    uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+    uint8_t key = registers[Vx];
+
+    if(keypad[key]){
+        PC +=2 ;
+    }
+}
+
+void Chip8::OP_ExA1(){
+    uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+    uint8_t key = registers[Vx];
+
+    if(!keypad[key]){
+        PC +=2 ;
+    }
+}
+
+void Chip8::OP_Fx07(){
+    uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+    registers[Vx] = delaytimer;
+}
+

@@ -37,7 +37,7 @@ public:
      * this register have to hold memory address for next instruction this is why it should be 16 bit cause last 
      * memory addres stores in 0xFFF and memory address is 16bit 
      */ 
-    uint16_t VI;
+    uint16_t I;
  
     /*
      * pc or programm counter stores the next instruction cpu need to handle and its 16 bit 
@@ -167,6 +167,114 @@ public:
      * set Vx = Vy
      */
     void OP_8xy0();
+
+    /*
+     * set Vx = Vx OR Vy
+     */
+    void OP_8xy1();
+
+    /*
+     * set Vx = Vx AND Vy
+     */
+    void OP_8xy2();
+
+    /*
+     * set Vx = Vx XOR Vy
+     */
+    void OP_8xy3();
+
+    /*
+     * set Vx = Vx + Vy and set Vy = carry if it's greater than 8 bits
+     * and make its value 1 otherwise 0 and store 8 bits in Vx
+     */
+    void OP_8xy4();
+
+    /*
+     * Vx = Vx - Vy set Vy = NOT borrow
+     * if Vx > Vy then Vy set to 1 otherwise 0 then Vy substracreed from Vx and results stored in Vx
+     */
+    void OP_8xy5();
+
+    /*
+     * set Vx= Vx SHR 1.
+     * if the least significant bit of Vx is 1 then  VF is set to 1 otherwise 0 then Vx is devided by 2
+     */
+    void OP_8xy6();
+
+    /*
+     * Vx = Vx - Vy set VF = NOT borrow
+     * if Vx > Vy then VF set to 1 otherwise 0 then Vy substracreed from Vx and results stored in Vx
+     */
+    void OP_8xy7();
+
+    /*
+     * set Vx = Vx SHL 1
+     * if the most segnificent bit of Vx is 1 then VF is set to 1 otherwise 0 
+     * then Vx multipliy by 2 
+     */
+    void OP_8xyE();
+
+    /*
+     * eskipp next instructin if Vx != Vy
+     * Since our PC has already been incremented by 2 in Cycle(), we can just
+     * increment by 2 again to skip the next instruction.
+     */
+    void OP_9xy0();
+
+    /*
+     * set I = nnn
+     */
+    void OP_Annn();
+
+    /*
+     * jump to location nnn + V0
+     */
+    void OP_Bnnn();
+
+    /*
+     * set Vx random byte AND kk
+     */
+    void OP_Cxkk();
+
+    /*
+     *Display n-byte sprite starting at memory location I at (Vx, Vy), set VF =
+     *collision.
+     *
+     *   We iterate over the sprite, row by row and column by column. We know
+     * there are eight columns because a sprite is guaranteed to be eight pixels
+     * wide.
+     *
+     *   If a sprite pixel is on then there may be a collision with what’s
+     * already being displayed, so we check if our screen pixel in the same
+     * location is set. If so we must set the VF register to express collision.
+     *
+     *   Then we can just XOR the screen pixel with 0xFFFFFFFF to essentially
+     * XOR it with the sprite pixel (which we now know is on). We can’t XOR
+     * directly because the sprite pixel is either 1 or 0 while our video pixel
+     * is either 0x00000000 or 0xFFFFFFFF.
+     */
+    void OP_Dxyn();
+
+    /*
+     * skipp the next instruction if the key with value of Vx pressed
+     */
+    void OP_Ex9E();
+
+    /*
+     * skipp the next instruction if the key with value of Vx not pressed
+     */
+    void OP_ExA1();
+
+    /*
+     * set Vx = delay timer value
+     */
+    void OP_Fx07();
+
+    /*
+     * wait for a key press, store store the value of the key in Vx
+     */
+    void OP_Fx08();
+
 
 
     // reading rom and load instructios in memory to execcute
